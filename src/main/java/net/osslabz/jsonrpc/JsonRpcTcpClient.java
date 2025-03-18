@@ -6,8 +6,10 @@ import static net.osslabz.jsonrpc.JsonRpcFieldNames.ID;
 import static net.osslabz.jsonrpc.JsonRpcFieldNames.RESULT;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import java.io.Closeable;
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -62,6 +64,8 @@ public class JsonRpcTcpClient implements Closeable {
         this.host = host;
         this.port = port;
         this.objectMapper = new ObjectMapper();
+        objectMapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+        objectMapper.registerModule(new JavaTimeModule());
 
         Thread selectorThread = new Thread(this::processSelectorEvents);
         selectorThread.setDaemon(true);
@@ -82,7 +86,7 @@ public class JsonRpcTcpClient implements Closeable {
                     try {
                         Thread.sleep(100);
                     } catch (InterruptedException e) {
-                        throw new JsonRcpException(e);
+                        // ignore
                     }
                     continue;
                 }
@@ -121,10 +125,10 @@ public class JsonRpcTcpClient implements Closeable {
                             writeData(key);
                         }
                     } catch (IOException e) {
+                        pendingRequests.clear();
                         pendingResponses.forEach((id, future) ->
                             future.completeExceptionally(e));
                         pendingResponses.clear();
-                        pendingRequests.clear();
                     }
                 }
             }
@@ -262,7 +266,6 @@ public class JsonRpcTcpClient implements Closeable {
         } catch (Exception e) {
             throw new JsonRcpException(e);
         }
-
     }
 
 
