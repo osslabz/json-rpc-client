@@ -18,12 +18,16 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,9 +39,13 @@ public class JsonRpcTcpClient implements Closeable {
 
     private static final int BUFFER_CAPACITY = 4096;
 
+    private static final Duration DEFAULT_CALL_TIMEOUT = Duration.ofSeconds(30);
+
     private final String host;
 
     private final int port;
+
+    private final Duration callTimeout;
 
     private SocketChannel socketChannel;
 
@@ -62,8 +70,15 @@ public class JsonRpcTcpClient implements Closeable {
 
     public JsonRpcTcpClient(String host, int port) {
 
+        this(host, port, DEFAULT_CALL_TIMEOUT);
+    }
+
+
+    public JsonRpcTcpClient(String host, int port, Duration callTimeout) {
+
         this.host = host;
         this.port = port;
+        this.callTimeout = callTimeout;
         this.objectMapper = new ObjectMapper();
         objectMapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
         objectMapper.registerModule(new JavaTimeModule());
@@ -169,6 +184,16 @@ public class JsonRpcTcpClient implements Closeable {
             future.completeExceptionally(e);
         }
 
+        future.orTimeout(callTimeout.toMillis(), TimeUnit.MILLISECONDS);
+        future.whenComplete((result, ex) -> {
+            if (ex != null) {
+                pendingResponses.remove(id);
+                if (ex instanceof TimeoutException) {
+                    log.warn("Request {} ({}) timed out after {}", id, method, callTimeout);
+                }
+            }
+        });
+
         return future;
     }
 
@@ -196,6 +221,9 @@ public class JsonRpcTcpClient implements Closeable {
         } catch (Exception e) {
             if (e instanceof JsonRpcException je) {
                 throw je;
+            }
+            if (e instanceof CompletionException ce && ce.getCause() instanceof TimeoutException) {
+                throw new JsonRpcException("RPC call '%s' timed out after %s".formatted(method, callTimeout));
             }
             throw new JsonRpcException("Failed to execute RPC call: %s".formatted(e.getMessage()));
         }

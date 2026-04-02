@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -89,6 +90,42 @@ class JsonRpcTcpClientTest {
 
             assertTrue(ex.getMessage().contains("-32601"), "Should contain error code");
             assertTrue(ex.getMessage().contains("Method not found"), "Should contain error message");
+        }
+    }
+
+
+    @Test
+    void callTimesOutWhenServerDoesNotRespond() {
+
+        server.setResponseDelay(Duration.ofSeconds(10));
+        server.handle("slow", params -> "ok");
+
+        try (JsonRpcTcpClient client = new JsonRpcTcpClient("localhost", server.getPort(), Duration.ofMillis(500))) {
+            assertThrows(JsonRpcException.class, () -> client.call("slow", List.of()));
+        }
+    }
+
+
+    @Test
+    void timeoutCleansPendingResponses() throws Exception {
+
+        server.setResponseDelay(Duration.ofMillis(1500));
+        server.handle("slow", params -> "ignored");
+
+        try (JsonRpcTcpClient client = new JsonRpcTcpClient("localhost", server.getPort(), Duration.ofMillis(200))) {
+            CompletableFuture<JsonNode> future = client.callAsync("slow", List.of());
+
+            assertThrows(Exception.class, () -> future.get(2, TimeUnit.SECONDS));
+
+            // Wait for the server to finish processing the delayed request
+            // so it can process the next one on the same connection
+            Thread.sleep(2000);
+
+            // Verify subsequent calls still work on the same client (no resource leak)
+            server.setResponseDelay(Duration.ZERO);
+            server.handle("echo", params -> "ok");
+            JsonNode result = client.call("echo", List.of());
+            assertNotNull(result);
         }
     }
 }
