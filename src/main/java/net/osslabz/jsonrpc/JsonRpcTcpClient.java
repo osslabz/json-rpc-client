@@ -72,7 +72,7 @@ public class JsonRpcTcpClient implements Closeable {
         selectorThread.start();
 
         if (!this.reconnectSocket()) {
-            throw new JsonRcpException("Initial connection to socket failed.");
+            throw new JsonRpcException("Initial connection to socket failed.");
         }
     }
 
@@ -133,7 +133,7 @@ public class JsonRpcTcpClient implements Closeable {
                 }
             }
         } catch (Exception e) {
-            throw new JsonRcpException(e);
+            throw new JsonRpcException(e);
         }
     }
 
@@ -181,22 +181,22 @@ public class JsonRpcTcpClient implements Closeable {
             log.debug("Raw response: {}", rawResponse);
 
             if (rawResponse == null) {
-                throw new JsonRcpException("No response received in time.");
+                throw new JsonRpcException("No response received in time.");
             }
 
             if (rawResponse.has(RESULT)) {
                 return rawResponse.get(RESULT);
             } else if (rawResponse.has(ERROR)) {
                 JsonRpcError errorResponse = this.objectMapper.treeToValue(rawResponse, JsonRpcError.class);
-                throw new JsonRcpException(errorResponse);
+                throw new JsonRpcException(errorResponse);
             } else {
-                throw new JsonRcpException("Received Invalid JSON-RPC Response (no result and no error)");
+                throw new JsonRpcException("Received Invalid JSON-RPC Response (no result and no error)");
             }
         } catch (Exception e) {
-            if (e instanceof JsonRcpException je) {
+            if (e instanceof JsonRpcException je) {
                 throw je;
             }
-            throw new JsonRcpException("Failed to execute RPC call: %s".formatted(e.getMessage()));
+            throw new JsonRpcException("Failed to execute RPC call: %s".formatted(e.getMessage()));
         }
     }
 
@@ -207,7 +207,7 @@ public class JsonRpcTcpClient implements Closeable {
         try {
             return this.objectMapper.treeToValue(result, returnType);
         } catch (JsonProcessingException e) {
-            throw new JsonRcpException(e);
+            throw new JsonRpcException(e);
         }
     }
 
@@ -218,7 +218,7 @@ public class JsonRpcTcpClient implements Closeable {
         try {
             return this.objectMapper.readerForListOf(returnType).readValue(result);
         } catch (IOException e) {
-            throw new JsonRcpException(e);
+            throw new JsonRpcException(e);
         }
 
     }
@@ -264,7 +264,7 @@ public class JsonRpcTcpClient implements Closeable {
             future.complete(jsonNode);
 
         } catch (Exception e) {
-            throw new JsonRcpException(e);
+            throw new JsonRpcException(e);
         }
     }
 
