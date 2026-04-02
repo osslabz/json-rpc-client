@@ -14,7 +14,6 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
-import java.nio.CharBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
@@ -57,6 +56,8 @@ public class JsonRpcTcpClient implements Closeable {
     private volatile boolean monitorSocket = true;
 
     private volatile boolean connected = false;
+
+    private final StringBuilder readBuffer = new StringBuilder();
 
 
     public JsonRpcTcpClient(String host, int port) {
@@ -224,47 +225,59 @@ public class JsonRpcTcpClient implements Closeable {
     }
 
 
-    private void readData(SelectionKey key) {
+    private void readData(SelectionKey key) throws IOException {
+
+        SocketChannel channel = (SocketChannel) key.channel();
+        ByteBuffer buffer = ByteBuffer.allocate(BUFFER_CAPACITY);
+
+        int bytesRead;
+        while ((bytesRead = channel.read(buffer)) > 0) {
+            buffer.flip();
+            readBuffer.append(StandardCharsets.UTF_8.decode(buffer));
+            buffer.clear();
+        }
+
+        if (bytesRead == -1) {
+            log.warn("Connection closed by server {}:{}", host, port);
+            connected = false;
+            return;
+        }
+
+        String data = readBuffer.toString();
+        int lastNewline = data.lastIndexOf('\n');
+        if (lastNewline == -1) {
+            return;
+        }
+
+        String completeData = data.substring(0, lastNewline);
+        readBuffer.delete(0, lastNewline + 1);
+
+        for (String line : completeData.split("\n")) {
+            String trimmed = line.trim();
+            if (!trimmed.isEmpty()) {
+                processResponse(trimmed);
+            }
+        }
+    }
+
+
+    private void processResponse(String rawJson) {
 
         try {
-            log.trace("Socket notified about new data to read, reading in chunks of {}.", BUFFER_CAPACITY);
-
-            StringBuilder sb = new StringBuilder();
-            int bytesRead = -1;
-            int i = 0;
-            ByteBuffer buffer = ByteBuffer.allocate(BUFFER_CAPACITY);
-
-            while ((bytesRead = ((SocketChannel) key.channel()).read(buffer)) > 0) {
-                i++;
-                log.trace("{} bytes read in {} round.", bytesRead, i);
-                CharBuffer decode = StandardCharsets.UTF_8.decode(buffer.slice(0, bytesRead));
-                sb.append(decode);
-            }
-            if (sb.isEmpty()) {
-                log.trace("received empty message, ignoring.");
-                return;
-            }
-            String rawResponse = sb.toString();
-            log.trace("Full message read, total length is {}.", rawResponse.length());
-
-            JsonNode jsonNode = this.objectMapper.readValue(rawResponse, JsonNode.class);
+            JsonNode jsonNode = objectMapper.readValue(rawJson, JsonNode.class);
             if (!jsonNode.has(ID)) {
-                log.warn("Invalid message received, no ID field found.");
+                log.warn("Received message without ID field, ignoring: {}", rawJson);
                 return;
             }
-
             Long id = jsonNode.get(ID).asLong();
-
-            CompletableFuture<JsonNode> future = this.pendingResponses.remove(id);
+            CompletableFuture<JsonNode> future = pendingResponses.remove(id);
             if (future == null) {
-                log.debug("Received a message for an unknown ID {}", id);
+                log.debug("Received response for unknown request ID {}", id);
                 return;
             }
-
             future.complete(jsonNode);
-
         } catch (Exception e) {
-            throw new JsonRpcException(e);
+            log.error("Failed to parse JSON-RPC response: {}", rawJson, e);
         }
     }
 
