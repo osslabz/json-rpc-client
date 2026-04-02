@@ -148,7 +148,7 @@ public class MockJsonRpcServer implements Closeable {
                 writer.println(responseJson);
                 writer.flush();
 
-                if (disconnectAfterRequests > 0 && requestCount >= disconnectAfterRequests) {
+                if (disconnectAfterRequests >= 0 && requestCount >= disconnectAfterRequests) {
                     log.debug("Disconnecting after {} requests", requestCount);
                     break;
                 }
