@@ -2,6 +2,7 @@ package net.osslabz.jsonrpc;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -75,6 +76,19 @@ class JsonRpcTcpClientTest {
         try (JsonRpcTcpClient client = new JsonRpcTcpClient("localhost", server.getPort())) {
             JsonNode result = client.call("large", List.of());
             assertEquals(largeValue, result.asText());
+        }
+    }
+
+
+    @Test
+    void serverErrorIncludesCodeAndMessage() {
+
+        try (JsonRpcTcpClient client = new JsonRpcTcpClient("localhost", server.getPort())) {
+            JsonRpcException ex = assertThrows(JsonRpcException.class,
+                () -> client.call("nonexistent", List.of()));
+
+            assertTrue(ex.getMessage().contains("-32601"), "Should contain error code");
+            assertTrue(ex.getMessage().contains("Method not found"), "Should contain error message");
         }
     }
 }

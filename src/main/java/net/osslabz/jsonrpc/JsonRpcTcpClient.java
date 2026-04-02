@@ -188,7 +188,7 @@ public class JsonRpcTcpClient implements Closeable {
             if (rawResponse.has(RESULT)) {
                 return rawResponse.get(RESULT);
             } else if (rawResponse.has(ERROR)) {
-                JsonRpcError errorResponse = this.objectMapper.treeToValue(rawResponse, JsonRpcError.class);
+                JsonRpcError errorResponse = this.objectMapper.treeToValue(rawResponse.get(ERROR), JsonRpcError.class);
                 throw new JsonRpcException(errorResponse);
             } else {
                 throw new JsonRpcException("Received Invalid JSON-RPC Response (no result and no error)");
