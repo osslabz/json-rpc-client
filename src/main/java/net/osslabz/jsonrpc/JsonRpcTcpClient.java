@@ -5,7 +5,6 @@ import static net.osslabz.jsonrpc.JsonRpcFieldNames.ERROR;
 import static net.osslabz.jsonrpc.JsonRpcFieldNames.ID;
 import static net.osslabz.jsonrpc.JsonRpcFieldNames.RESULT;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -239,17 +238,6 @@ public class JsonRpcTcpClient implements Closeable {
                 throw new JsonRpcException("RPC call '%s' timed out after %s".formatted(method, callTimeout));
             }
             throw new JsonRpcException("Failed to execute RPC call: %s".formatted(e.getMessage()));
-        }
-    }
-
-
-    public <T> T callAndMap(String method, Object params, Class<T> returnType) {
-
-        JsonNode result = this.call(method, params);
-        try {
-            return this.objectMapper.treeToValue(result, returnType);
-        } catch (JsonProcessingException e) {
-            throw new JsonRpcException(e);
         }
     }
 
