@@ -151,14 +151,14 @@ public class JsonRpcTcpClient implements Closeable {
     private void writeData(SelectionKey key) throws IOException {
 
         SocketChannel channel = (SocketChannel) key.channel();
-        String request = pendingRequests.poll();
-
-        if (request != null) {
+        String request;
+        while ((request = pendingRequests.poll()) != null) {
             log.debug("Sending request: {}", request);
             ByteBuffer buffer = ByteBuffer.wrap((request + "\n").getBytes(StandardCharsets.UTF_8));
-            channel.write(buffer);
+            while (buffer.hasRemaining()) {
+                channel.write(buffer);
+            }
         }
-
     }
 
 

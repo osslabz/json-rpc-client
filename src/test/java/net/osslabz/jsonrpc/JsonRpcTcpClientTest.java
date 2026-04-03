@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -161,6 +162,27 @@ class JsonRpcTcpClientTest {
         assertThrows(JsonRpcException.class, () -> client.call("anything", List.of()));
         long elapsed = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start);
         assertTrue(elapsed < 2000, "call after close should fail fast, took " + elapsed + "ms");
+    }
+
+
+    @Test
+    void handlesBurstOfRequests() throws Exception {
+
+        server.handle("ping", params -> "pong");
+
+        try (JsonRpcTcpClient client = new JsonRpcTcpClient("localhost", server.getPort())) {
+            int count = 50;
+            List<CompletableFuture<JsonNode>> futures = new ArrayList<>();
+
+            for (int i = 0; i < count; i++) {
+                futures.add(client.callAsync("ping", List.of()));
+            }
+
+            for (CompletableFuture<JsonNode> f : futures) {
+                JsonNode response = f.get(10, TimeUnit.SECONDS);
+                assertNotNull(response);
+            }
+        }
     }
 
 
