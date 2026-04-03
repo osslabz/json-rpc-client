@@ -311,6 +311,7 @@ public class JsonRpcTcpClient implements Closeable {
                 return;
             }
             Long id = jsonNode.get(ID).asLong();
+            log.debug("Received response for request {}", id);
             PendingCall pending = pendingResponses.remove(id);
             if (pending == null) {
                 log.debug("Received response for unknown request ID {}", id);
@@ -331,21 +332,21 @@ public class JsonRpcTcpClient implements Closeable {
             log.debug("{} connection attempt to '{}:{}'", this.totalConnectCount, this.host, this.port);
             this.socketChannel = SocketChannel.open(new InetSocketAddress(this.host, this.port));
 
-            log.debug("Successfully connected.");
+            log.info("Connected to {}:{}", this.host, this.port);
 
             if (this.socketChannel.isBlocking()) {
                 log.trace("Socket channel is blocking, reconfiguring to unblocking...");
                 this.socketChannel.configureBlocking(false);
             }
             this.selector = Selector.open();
-            this.socketChannel.register(selector, SelectionKey.OP_READ | SelectionKey.OP_WRITE | SelectionKey.OP_CONNECT);
+            this.socketChannel.register(selector, SelectionKey.OP_READ | SelectionKey.OP_WRITE);
 
             connected = true;
             everConnected = true;
 
             return true;
         } catch (Exception e) {
-            log.warn("Exception while connecting to socket.");
+            log.warn("Failed to connect to {}:{}: {}", this.host, this.port, e.getMessage());
             return false;
         }
     }
