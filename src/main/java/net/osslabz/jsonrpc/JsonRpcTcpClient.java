@@ -95,62 +95,54 @@ public class JsonRpcTcpClient implements Closeable {
 
     private void processSelectorEvents() {
 
-        try {
-            while (this.monitorSocket) {
-
+        while (this.monitorSocket) {
+            try {
                 if (!this.connected) {
-                    try {
-                        Thread.sleep(100);
-                    } catch (InterruptedException e) {
-                        // ignore
-                    }
+                    Thread.sleep(100);
                     continue;
                 }
 
-                // Wait for events
-                int readyChannels = this.selector.select(100); // Small timeout to avoid blocking forever
-
+                int readyChannels = this.selector.select(100);
                 if (readyChannels == 0) {
-                    log.trace("No channels selected.");
                     continue;
                 }
 
                 Iterator<SelectionKey> keyIterator = this.selector.selectedKeys().iterator();
-
                 while (keyIterator.hasNext()) {
                     SelectionKey key = keyIterator.next();
                     keyIterator.remove();
 
+                    if (!key.isValid()) {
+                        continue;
+                    }
+
                     try {
-                        if (!key.isValid()) {
-                            log.trace("Key {} is invalid, skipping key.", key);
-                            continue;
-                        }
-
-                        if (key.isConnectable()) {
-                            log.trace("Key {} is connectable, skipping key.", key);
-                        }
-
                         if (key.isReadable()) {
-                            log.trace("Key {} is readable, reading data...", key);
                             readData(key);
+                            if (!connected) {
+                                break;
+                            }
                         }
-
                         if (key.isWritable() && !pendingRequests.isEmpty()) {
-                            log.trace("Key is writable, sending pending requests...");
                             writeData(key);
                         }
                     } catch (IOException e) {
-                        pendingRequests.clear();
-                        pendingResponses.forEach((id, future) ->
-                            future.completeExceptionally(e));
-                        pendingResponses.clear();
+                        log.error("I/O error in selector loop for {}:{}", host, port, e);
+                        connected = false;
+                        break;
+                    } catch (Exception e) {
+                        log.error("Unexpected error in selector loop for {}:{}", host, port, e);
                     }
                 }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                log.debug("Selector thread interrupted");
+            } catch (Exception e) {
+                log.error("Critical error in selector loop for {}:{}", host, port, e);
+                connected = false;
             }
-        } catch (Exception e) {
-            throw new JsonRpcException(e);
         }
+        log.debug("Selector thread exiting for {}:{}", host, port);
     }
 
 

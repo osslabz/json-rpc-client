@@ -117,8 +117,10 @@ public class MockJsonRpcServer implements Closeable {
                     Thread.sleep(responseDelay.toMillis());
                 }
 
-                if (rawResponse != null) {
-                    writer.println(rawResponse);
+                String pendingRaw = rawResponse;
+                if (pendingRaw != null) {
+                    rawResponse = null;
+                    writer.println(pendingRaw);
                     writer.flush();
                     continue;
                 }
