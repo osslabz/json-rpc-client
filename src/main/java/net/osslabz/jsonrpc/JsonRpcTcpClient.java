@@ -41,6 +41,8 @@ public class JsonRpcTcpClient implements Closeable {
 
     private static final Duration DEFAULT_CALL_TIMEOUT = Duration.ofSeconds(30);
 
+    private static final int MAX_RECONNECT_ATTEMPTS = 3;
+
     private final String host;
 
     private final int port;
@@ -57,13 +59,17 @@ public class JsonRpcTcpClient implements Closeable {
 
     private final ConcurrentLinkedQueue<String> pendingRequests = new ConcurrentLinkedQueue<>();
 
-    private Map<Long, CompletableFuture<JsonNode>> pendingResponses = new ConcurrentHashMap<>();
+    private final Map<Long, PendingCall> pendingResponses = new ConcurrentHashMap<>();
 
     private Selector selector;
 
     private volatile boolean monitorSocket = true;
 
     private volatile boolean connected = false;
+
+    private volatile boolean everConnected = false;
+
+    private volatile boolean failed = false;
 
     private final StringBuilder readBuffer = new StringBuilder();
 
@@ -100,7 +106,12 @@ public class JsonRpcTcpClient implements Closeable {
         while (this.monitorSocket) {
             try {
                 if (!this.connected) {
-                    Thread.sleep(100);
+                    if (this.everConnected && this.monitorSocket && !this.failed) {
+                        handleConnectionLoss();
+                    }
+                    if (!this.connected) {
+                        Thread.sleep(100);
+                    }
                     continue;
                 }
 
@@ -167,6 +178,10 @@ public class JsonRpcTcpClient implements Closeable {
         if (!monitorSocket) {
             return CompletableFuture.failedFuture(new JsonRpcException("Client is closed"));
         }
+        if (failed) {
+            return CompletableFuture.failedFuture(
+                new JsonRpcException("Client is disconnected from %s:%d".formatted(host, port)));
+        }
 
         long id = idGenerator.incrementAndGet();
 
@@ -176,7 +191,7 @@ public class JsonRpcTcpClient implements Closeable {
 
         try {
             String requestJson = objectMapper.writeValueAsString(request);
-            pendingResponses.put(id, future);
+            pendingResponses.put(id, new PendingCall(future, requestJson));
             pendingRequests.add(requestJson);
         } catch (Exception e) {
             future.completeExceptionally(e);
@@ -296,12 +311,12 @@ public class JsonRpcTcpClient implements Closeable {
                 return;
             }
             Long id = jsonNode.get(ID).asLong();
-            CompletableFuture<JsonNode> future = pendingResponses.remove(id);
-            if (future == null) {
+            PendingCall pending = pendingResponses.remove(id);
+            if (pending == null) {
                 log.debug("Received response for unknown request ID {}", id);
                 return;
             }
-            future.complete(jsonNode);
+            pending.future().complete(jsonNode);
         } catch (Exception e) {
             log.error("Failed to parse JSON-RPC response: {}", rawJson, e);
         }
@@ -326,12 +341,56 @@ public class JsonRpcTcpClient implements Closeable {
             this.socketChannel.register(selector, SelectionKey.OP_READ | SelectionKey.OP_WRITE | SelectionKey.OP_CONNECT);
 
             connected = true;
+            everConnected = true;
 
             return true;
         } catch (Exception e) {
             log.warn("Exception while connecting to socket.");
             return false;
         }
+    }
+
+
+    private void handleConnectionLoss() {
+
+        readBuffer.setLength(0);
+        closeQuietly(socketChannel);
+        closeQuietly(selector);
+
+        for (int attempt = 1; attempt <= MAX_RECONNECT_ATTEMPTS; attempt++) {
+            if (!monitorSocket) {
+                return;
+            }
+
+            long backoffMs = 1000L * (1 << (attempt - 1));
+            log.info("Reconnecting to {}:{} (attempt {}/{}) in {}ms",
+                host, port, attempt, MAX_RECONNECT_ATTEMPTS, backoffMs);
+
+            try {
+                Thread.sleep(backoffMs);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+
+            if (reconnectSocket()) {
+                log.info("Successfully reconnected to {}:{}", host, port);
+                pendingResponses.forEach((id, pending) ->
+                    pendingRequests.add(pending.requestJson()));
+                log.info("Re-queued {} pending requests", pendingResponses.size());
+                return;
+            }
+        }
+
+        log.error("Failed to reconnect to {}:{} after {} attempts", host, port, MAX_RECONNECT_ATTEMPTS);
+        failed = true;
+        JsonRpcException cause = new JsonRpcException(
+            "Connection lost to %s:%d and reconnection failed after %d attempts"
+                .formatted(host, port, MAX_RECONNECT_ATTEMPTS));
+        pendingResponses.forEach((id, pending) ->
+            pending.future().completeExceptionally(cause));
+        pendingResponses.clear();
+        pendingRequests.clear();
     }
 
 
@@ -357,8 +416,8 @@ public class JsonRpcTcpClient implements Closeable {
             }
         }
 
-        pendingResponses.forEach((id, future) ->
-            future.completeExceptionally(new JsonRpcException("Client closed")));
+        pendingResponses.forEach((id, pending) ->
+            pending.future().completeExceptionally(new JsonRpcException("Client closed")));
         pendingResponses.clear();
         pendingRequests.clear();
 
@@ -377,4 +436,7 @@ public class JsonRpcTcpClient implements Closeable {
             }
         }
     }
+
+
+    private record PendingCall(CompletableFuture<JsonNode> future, String requestJson) {}
 }

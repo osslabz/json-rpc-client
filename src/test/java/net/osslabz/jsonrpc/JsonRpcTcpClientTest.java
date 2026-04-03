@@ -187,6 +187,71 @@ class JsonRpcTcpClientTest {
 
 
     @Test
+    void reconnectsAfterServerDropsConnection() throws Exception {
+
+        server.handle("test", params -> "ok");
+        server.disconnectAfterRequests(1);
+
+        try (JsonRpcTcpClient client = new JsonRpcTcpClient("localhost", server.getPort(), Duration.ofSeconds(15))) {
+            JsonNode result1 = client.call("test", List.of());
+            assertEquals("ok", result1.asText());
+
+            // Give time for the server to close the connection and client to detect EOF
+            Thread.sleep(500);
+
+            JsonNode result2 = client.call("test", List.of());
+            assertEquals("ok", result2.asText());
+        }
+    }
+
+
+    @Test
+    void failsFuturesAfterMaxReconnectAttempts() throws Exception {
+
+        server.handle("test", params -> "ok");
+
+        try (JsonRpcTcpClient client = new JsonRpcTcpClient("localhost", server.getPort(), Duration.ofSeconds(30))) {
+            client.call("test", List.of());
+
+            server.close();
+
+            // Wait for EOF detection
+            Thread.sleep(500);
+
+            JsonRpcException ex = assertThrows(JsonRpcException.class, () -> client.call("test", List.of()));
+            assertTrue(ex.getMessage().contains("reconnection failed") || ex.getMessage().contains("disconnected"),
+                "Should indicate reconnection failure: " + ex.getMessage());
+        }
+    }
+
+
+    @Test
+    void failsFastAfterReconnectionFailure() throws Exception {
+
+        server.handle("test", params -> "ok");
+
+        JsonRpcTcpClient client = new JsonRpcTcpClient("localhost", server.getPort(), Duration.ofSeconds(30));
+        try {
+            client.call("test", List.of());
+
+            server.close();
+            Thread.sleep(500);
+
+            // First call fails after reconnection exhausts
+            assertThrows(JsonRpcException.class, () -> client.call("test", List.of()));
+
+            // Second call should fail immediately (fail-fast)
+            long start = System.currentTimeMillis();
+            assertThrows(JsonRpcException.class, () -> client.call("test", List.of()));
+            long elapsed = System.currentTimeMillis() - start;
+            assertTrue(elapsed < 1000, "Should fail fast, got " + elapsed + "ms");
+        } finally {
+            client.close();
+        }
+    }
+
+
+    @Test
     void timeoutCleansPendingResponses() throws Exception {
 
         server.setResponseDelay(Duration.ofMillis(1500));
