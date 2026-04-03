@@ -273,4 +273,61 @@ class JsonRpcTcpClientTest {
             assertNotNull(result);
         }
     }
+
+
+    @Test
+    void retriesPendingRequestAfterReconnect() throws Exception {
+
+        server.handle("test", params -> "retried-ok");
+        server.disconnectBeforeFirstResponse();
+
+        try (JsonRpcTcpClient client = new JsonRpcTcpClient("localhost", server.getPort(), Duration.ofSeconds(15))) {
+            // The first connection reads the request but closes before responding.
+            // The client detects EOF, reconnects, re-queues the pending request,
+            // and the second connection handles it normally.
+            JsonNode result = client.call("test", List.of());
+            assertEquals("retried-ok", result.asText());
+        }
+    }
+
+
+    @Test
+    void throwsOnInitialConnectionFailure() {
+
+        assertThrows(JsonRpcException.class,
+            () -> new JsonRpcTcpClient("localhost", 1));
+    }
+
+
+    @Test
+    void callAndMapListReturnsTypedList() throws Exception {
+
+        server.handle("getItems", params -> List.of("a", "b", "c"));
+
+        try (JsonRpcTcpClient client = new JsonRpcTcpClient("localhost", server.getPort())) {
+            List<String> items = client.callAndMapList("getItems", List.of(), String.class);
+            assertEquals(3, items.size());
+            assertEquals("a", items.get(0));
+            assertEquals("b", items.get(1));
+            assertEquals("c", items.get(2));
+        }
+    }
+
+
+    @Test
+    void timeoutExceptionMessageIncludesDetails() {
+
+        server.setResponseDelay(Duration.ofSeconds(10));
+        server.handle("myMethod", params -> "ok");
+
+        try (JsonRpcTcpClient client = new JsonRpcTcpClient("localhost", server.getPort(), Duration.ofMillis(200))) {
+            JsonRpcException ex = assertThrows(JsonRpcException.class,
+                () -> client.call("myMethod", List.of()));
+
+            assertTrue(ex.getMessage().contains("myMethod"),
+                "Should contain method name: " + ex.getMessage());
+            assertTrue(ex.getMessage().contains("timed out"),
+                "Should mention timeout: " + ex.getMessage());
+        }
+    }
 }

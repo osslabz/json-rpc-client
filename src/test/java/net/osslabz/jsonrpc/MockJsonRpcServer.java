@@ -43,6 +43,8 @@ public class MockJsonRpcServer implements Closeable {
 
     private volatile String rawResponse = null;
 
+    private volatile boolean disconnectBeforeFirstResponse = false;
+
 
     public MockJsonRpcServer() throws IOException {
 
@@ -81,6 +83,12 @@ public class MockJsonRpcServer implements Closeable {
     }
 
 
+    public void disconnectBeforeFirstResponse() {
+
+        this.disconnectBeforeFirstResponse = true;
+    }
+
+
     private void acceptLoop() {
 
         while (running) {
@@ -112,6 +120,12 @@ public class MockJsonRpcServer implements Closeable {
             while (running && (line = reader.readLine()) != null) {
                 requestCount++;
                 log.debug("Received request: {}", line);
+
+                if (disconnectBeforeFirstResponse) {
+                    disconnectBeforeFirstResponse = false;
+                    log.debug("Disconnecting before responding (one-shot)");
+                    return;
+                }
 
                 if (!responseDelay.isZero()) {
                     Thread.sleep(responseDelay.toMillis());
