@@ -53,7 +53,7 @@ public class JsonRpcTcpClient implements Closeable {
 
     private final ObjectMapper objectMapper;
 
-    private int totalConnectCount = 0;
+    private volatile int totalConnectCount = 0;
 
     private final AtomicLong idGenerator = new AtomicLong(0);
 
@@ -347,6 +347,7 @@ public class JsonRpcTcpClient implements Closeable {
             return true;
         } catch (Exception e) {
             log.warn("Failed to connect to {}:{}: {}", this.host, this.port, e.getMessage());
+            closeQuietly(socketChannel);
             return false;
         }
     }
@@ -412,6 +413,10 @@ public class JsonRpcTcpClient implements Closeable {
         if (selectorThread != null) {
             try {
                 selectorThread.join(2000);
+                if (selectorThread.isAlive()) {
+                    selectorThread.interrupt();
+                    selectorThread.join(1000);
+                }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
