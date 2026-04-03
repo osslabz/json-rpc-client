@@ -125,6 +125,46 @@ class JsonRpcTcpClientTest {
 
 
     @Test
+    void closeCompletesAllPendingFutures() throws Exception {
+
+        server.setResponseDelay(Duration.ofSeconds(60));
+        server.handle("slow", params -> "ignored");
+
+        try (JsonRpcTcpClient client = new JsonRpcTcpClient("localhost", server.getPort(), Duration.ofSeconds(60))) {
+            CompletableFuture<JsonNode> f1 = client.callAsync("slow", List.of());
+            CompletableFuture<JsonNode> f2 = client.callAsync("slow", List.of());
+
+            Thread.sleep(200);
+
+            client.close();
+
+            // Both futures must complete within 2 seconds -- if close() doesn't
+            // complete them, they'd hang for the full 60s call timeout
+            assertThrows(Exception.class, () -> f1.get(2, TimeUnit.SECONDS));
+            assertThrows(Exception.class, () -> f2.get(2, TimeUnit.SECONDS));
+        }
+    }
+
+
+    @Test
+    void callAfterCloseFailsFast() throws Exception {
+
+        server.handle("test", params -> "ok");
+        JsonRpcTcpClient client = new JsonRpcTcpClient("localhost", server.getPort());
+
+        client.call("test", List.of());
+
+        client.close();
+
+        // Should throw immediately with JsonRpcException, not hang for the 30s default timeout
+        long start = System.nanoTime();
+        assertThrows(JsonRpcException.class, () -> client.call("anything", List.of()));
+        long elapsed = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start);
+        assertTrue(elapsed < 2000, "call after close should fail fast, took " + elapsed + "ms");
+    }
+
+
+    @Test
     void timeoutCleansPendingResponses() throws Exception {
 
         server.setResponseDelay(Duration.ofMillis(1500));

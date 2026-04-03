@@ -67,6 +67,8 @@ public class JsonRpcTcpClient implements Closeable {
 
     private final StringBuilder readBuffer = new StringBuilder();
 
+    private Thread selectorThread;
+
 
     public JsonRpcTcpClient(String host, int port) {
 
@@ -83,9 +85,9 @@ public class JsonRpcTcpClient implements Closeable {
         objectMapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
         objectMapper.registerModule(new JavaTimeModule());
 
-        Thread selectorThread = new Thread(this::processSelectorEvents);
-        selectorThread.setDaemon(true);
-        selectorThread.start();
+        this.selectorThread = new Thread(this::processSelectorEvents);
+        this.selectorThread.setDaemon(true);
+        this.selectorThread.start();
 
         if (!this.reconnectSocket()) {
             throw new JsonRpcException("Initial connection to socket failed.");
@@ -161,6 +163,10 @@ public class JsonRpcTcpClient implements Closeable {
 
 
     public CompletableFuture<JsonNode> callAsync(String method, Object params) {
+
+        if (!monitorSocket) {
+            return CompletableFuture.failedFuture(new JsonRpcException("Client is closed"));
+        }
 
         long id = idGenerator.incrementAndGet();
 
@@ -331,14 +337,44 @@ public class JsonRpcTcpClient implements Closeable {
 
     public void close() {
 
-        this.connected = false;
-        this.monitorSocket = false;
+        if (!monitorSocket) {
+            return;
+        }
 
-        try {
-            // this closes also the inputStream and outputStream
-            this.socketChannel.close();
-        } catch (IOException e) {
-            log.warn("Couldn't close the socket: {}.", e.getMessage());
+        log.info("Closing JSON-RPC client for {}:{}", host, port);
+        this.monitorSocket = false;
+        this.connected = false;
+
+        if (selector != null && selector.isOpen()) {
+            selector.wakeup();
+        }
+
+        if (selectorThread != null) {
+            try {
+                selectorThread.join(2000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+
+        pendingResponses.forEach((id, future) ->
+            future.completeExceptionally(new JsonRpcException("Client closed")));
+        pendingResponses.clear();
+        pendingRequests.clear();
+
+        closeQuietly(socketChannel);
+        closeQuietly(selector);
+    }
+
+
+    private void closeQuietly(Closeable resource) {
+
+        if (resource != null) {
+            try {
+                resource.close();
+            } catch (IOException e) {
+                log.debug("Error closing resource: {}", e.getMessage());
+            }
         }
     }
 }
