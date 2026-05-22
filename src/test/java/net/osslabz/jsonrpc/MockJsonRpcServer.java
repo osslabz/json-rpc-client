@@ -14,6 +14,7 @@ import java.net.SocketException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -32,6 +33,8 @@ public class MockJsonRpcServer implements Closeable {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private final Map<String, Function<JsonNode, Object>> handlers = new ConcurrentHashMap<>();
+
+    private final Set<Socket> clientSockets = ConcurrentHashMap.newKeySet();
 
     private final ExecutorService executor = Executors.newCachedThreadPool();
 
@@ -94,6 +97,7 @@ public class MockJsonRpcServer implements Closeable {
         while (running) {
             try {
                 Socket clientSocket = serverSocket.accept();
+                clientSockets.add(clientSocket);
                 executor.submit(() -> handleClient(clientSocket));
             } catch (SocketException e) {
                 if (running) {
@@ -175,6 +179,8 @@ public class MockJsonRpcServer implements Closeable {
             if (running) {
                 log.warn("Error handling client: {}", e.getMessage());
             }
+        } finally {
+            clientSockets.remove(clientSocket);
         }
     }
 
@@ -184,6 +190,9 @@ public class MockJsonRpcServer implements Closeable {
 
         running = false;
         serverSocket.close();
+        for (Socket clientSocket : clientSockets) {
+            clientSocket.close();
+        }
         executor.shutdown();
         try {
             if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
