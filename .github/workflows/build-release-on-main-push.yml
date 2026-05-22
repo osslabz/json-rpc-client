@@ -16,17 +16,19 @@ jobs:
 
     steps:
       - name: checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: main
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: setup-jdk
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           java-version: 21
           distribution: 'temurin'
           cache: maven
-          server-id: ossrh
+          server-id: central
           server-username: MAVEN_USERNAME
           server-password: MAVEN_PASSWORD
           gpg-private-key: ${{ secrets.OSSRH_GPG_SECRET_KEY }}
@@ -40,12 +42,16 @@ jobs:
         with:
           user: bot
 
-      - name: publish-on-maven-central
-        run: mvn --batch-mode -P osslabz-release clean release:clean release:prepare release:perform
+      - name: release-publish-on-maven-central
+        run: mvn --batch-mode -P osslabz-release clean release:prepare release:perform
         env:
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.OSSRH_GPG_SECRET_KEY_PASSWORD }}
           MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
           MAVEN_PASSWORD: ${{ secrets.OSSRH_TOKEN }}
-          MAVEN_GPG_PASSPHRASE: ${{ secrets.OSSRH_GPG_SECRET_KEY_PASSWORD }}
+
+      - name: push-tag
+        run: |
+          git push origin --tags
 
       - name: 'get-latest-tag'
         id: 'get-latest-tag'
@@ -59,7 +65,8 @@ jobs:
 
       - name: merge-main-to-dev
         run: |
-          git fetch --unshallow
+          git checkout main
+          git pull
           git checkout dev
           git pull
           git merge --no-ff main -m "[release] auto-merge released main back to dev"

@@ -4,7 +4,7 @@
 
     <groupId>net.osslabz</groupId>
     <artifactId>json-rpc-client</artifactId>
-    <version>0.0.5-SNAPSHOT</version>
+    <version>0.0.7-SNAPSHOT</version>
 
     <name>${project.groupId}:${project.artifactId}</name>
     <description>Provides a basic JSON-RPC client.</description>
@@ -17,7 +17,7 @@
         <project.build.sourceEncoding>${osslabz.encoding}</project.build.sourceEncoding>
         <project.reporting.outputEncoding>${osslabz.encoding}</project.reporting.outputEncoding>
 
-        <project.build.outputTimestamp>2025-03-18T10:35:48Z</project.build.outputTimestamp>
+        <project.build.outputTimestamp>2026-05-22T09:49:01Z</project.build.outputTimestamp>
 
         <maven.compiler.release>${osslabz.java.version}</maven.compiler.release>
 
@@ -156,14 +156,13 @@
                         </executions>
                     </plugin>
                     <plugin>
-                        <groupId>org.sonatype.plugins</groupId>
-                        <artifactId>nexus-staging-maven-plugin</artifactId>
-                        <version>1.7.0</version>
+                        <groupId>org.sonatype.central</groupId>
+                        <artifactId>central-publishing-maven-plugin</artifactId>
+                        <version>0.9.0</version>
                         <extensions>true</extensions>
                         <configuration>
-                            <serverId>ossrh</serverId>
-                            <nexusUrl>https://s01.oss.sonatype.org/</nexusUrl>
-                            <autoReleaseAfterClose>true</autoReleaseAfterClose>
+                            <autoPublish>true</autoPublish>
+                            <waitUntil>published</waitUntil>
                         </configuration>
                     </plugin>
                 </plugins>
@@ -216,7 +215,8 @@
                     <generateGitPropertiesFile>true</generateGitPropertiesFile>
                     <includeOnlyProperties>
                         <includeOnlyProperty>git.branch</includeOnlyProperty>
-                        <includeOnlyProperty>^git.build.(time|version)$</includeOnlyProperty>
+                        <includeOnlyProperty>git.tag</includeOnlyProperty>
+                        <includeOnlyProperty>git.build.version</includeOnlyProperty>
                         <includeOnlyProperty>^git.commit.id.(abbrev|full)$</includeOnlyProperty>
                     </includeOnlyProperties>
                     <commitIdGenerationMode>full</commitIdGenerationMode>
@@ -224,12 +224,4 @@
             </plugin>
         </plugins>
     </build>
-
-    <distributionManagement>
-        <repository>
-            <id>ossrh</id>
-            <name>Maven Central</name>
-            <url>https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/</url>
-        </repository>
-    </distributionManagement>
 </project>
