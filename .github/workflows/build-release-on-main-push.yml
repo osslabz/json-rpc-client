@@ -49,10 +49,6 @@ jobs:
           MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
           MAVEN_PASSWORD: ${{ secrets.OSSRH_TOKEN }}
 
-      - name: push-tag
-        run: |
-          git push origin --tags
-
       - name: 'get-latest-tag'
         id: 'get-latest-tag'
         uses: "WyriHaximus/github-action-get-previous-tag@v1"
