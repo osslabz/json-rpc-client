@@ -6,8 +6,8 @@ JSON-RPC Client
 [![Reproducible Builds](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/jvm-repo-rebuild/reproducible-central/master/content/net/osslabz/json-rpc-client/badge.json)](https://github.com/jvm-repo-rebuild/reproducible-central/blob/master/content/net/osslabz/json-rpc-client/README.md)
 [![Maven Central](https://img.shields.io/maven-central/v/net.osslabz/json-rpc-client?label=Maven%20Central)](https://search.maven.org/artifact/net.osslabz/json-rpc-client)
 
-One author, four releases on Maven Central since March 2025, used by one other project of mine. Seventeen tests run
-against an in-repo mock server and cover reconnects, timeouts and malformed responses, but the API is 0.x and can still
+One author, four releases on Maven Central since March 2025, used by one other project of mine. Thirty tests, most
+of them against an in-repo mock server, cover reconnects, timeouts and malformed responses, but the API is 0.x and can still
 change.
 
 Maven
