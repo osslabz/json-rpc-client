@@ -1,10 +1,12 @@
 package net.osslabz.jsonrpc;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -13,6 +15,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -98,6 +101,19 @@ class JsonRpcTcpClientTest {
 
             assertTrue(ex.getMessage().contains("-32601"), "Should contain error code");
             assertTrue(ex.getMessage().contains("Method not found"), "Should contain error message");
+        }
+    }
+
+    @Test
+    void malformedErrorResponseFailsWithTheParseErrorAsCause() {
+
+        server.sendRawResponse("{\"jsonrpc\":\"2.0\",\"id\":1,\"error\":\"not an error object\"}");
+
+        try (JsonRpcTcpClient client = new JsonRpcTcpClient("localhost", server.getPort())) {
+            JsonRpcException ex = assertThrows(JsonRpcException.class, () -> client.call("test", List.of()));
+
+            assertTrue(ex.getMessage().startsWith("Failed to execute RPC call: "), ex.getMessage());
+            assertInstanceOf(JsonProcessingException.class, ex.getCause());
         }
     }
 
@@ -364,6 +380,7 @@ class JsonRpcTcpClientTest {
 
             assertTrue(ex.getMessage().contains("myMethod"), "Should contain method name: " + ex.getMessage());
             assertTrue(ex.getMessage().contains("timed out"), "Should mention timeout: " + ex.getMessage());
+            assertInstanceOf(TimeoutException.class, ex.getCause().getCause());
         }
     }
 }

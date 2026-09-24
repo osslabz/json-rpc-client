@@ -4,6 +4,7 @@ import static net.osslabz.jsonrpc.JsonRpcFieldNames.ERROR;
 import static net.osslabz.jsonrpc.JsonRpcFieldNames.ID;
 import static net.osslabz.jsonrpc.JsonRpcFieldNames.RESULT;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -208,33 +209,46 @@ public class JsonRpcTcpClient implements Closeable {
 
     public JsonNode call(String method, Object params) {
 
-        CompletableFuture<JsonNode> future = callAsync(method, params);
-        try {
-            JsonNode rawResponse = future.join();
+        JsonNode rawResponse = awaitResponse(method, callAsync(method, params));
 
-            log.debug("Raw response: {}", rawResponse);
+        log.debug("Raw response: {}", rawResponse);
 
-            if (rawResponse == null) {
-                throw new JsonRpcException("No response received in time.");
-            }
-
-            if (rawResponse.has(RESULT)) {
-                return rawResponse.get(RESULT);
-            } else if (rawResponse.has(ERROR)) {
-                JsonRpcError errorResponse = this.objectMapper.treeToValue(rawResponse.get(ERROR), JsonRpcError.class);
-                throw new JsonRpcException(errorResponse);
-            } else {
-                throw new JsonRpcException("Received Invalid JSON-RPC Response (no result and no error)");
-            }
-        } catch (Exception e) {
-            if (e instanceof JsonRpcException je) {
-                throw je;
-            }
-            if (e instanceof CompletionException ce && ce.getCause() instanceof TimeoutException) {
-                throw new JsonRpcException("RPC call '%s' timed out after %s".formatted(method, callTimeout));
-            }
-            throw new JsonRpcException("Failed to execute RPC call: %s".formatted(e.getMessage()));
+        if (rawResponse == null) {
+            throw new JsonRpcException("No response received in time.");
         }
+        if (rawResponse.has(RESULT)) {
+            return rawResponse.get(RESULT);
+        }
+        if (rawResponse.has(ERROR)) {
+            throw new JsonRpcException(readError(rawResponse.get(ERROR)));
+        }
+        throw new JsonRpcException("Received Invalid JSON-RPC Response (no result and no error)");
+    }
+
+    private JsonNode awaitResponse(String method, CompletableFuture<JsonNode> future) {
+
+        try {
+            return future.join();
+        } catch (CompletionException e) {
+            if (e.getCause() instanceof TimeoutException) {
+                throw new JsonRpcException("RPC call '%s' timed out after %s".formatted(method, callTimeout), e);
+            }
+            throw callFailed(e);
+        }
+    }
+
+    private JsonRpcError readError(JsonNode error) {
+
+        try {
+            return this.objectMapper.treeToValue(error, JsonRpcError.class);
+        } catch (JsonProcessingException | IllegalArgumentException e) {
+            throw callFailed(e);
+        }
+    }
+
+    private static JsonRpcException callFailed(Exception cause) {
+
+        return new JsonRpcException("Failed to execute RPC call: %s".formatted(cause.getMessage()), cause);
     }
 
     public <T> List<T> callAndMapList(String method, Object params, Class<T> returnType) {

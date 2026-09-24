@@ -7,6 +7,11 @@ public class JsonRpcException extends RuntimeException {
         super(message);
     }
 
+    public JsonRpcException(String message, Throwable cause) {
+
+        super(message, cause);
+    }
+
     public JsonRpcException(Throwable e) {
 
         super(e);
