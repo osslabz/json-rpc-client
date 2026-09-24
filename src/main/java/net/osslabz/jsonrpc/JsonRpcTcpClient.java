@@ -367,6 +367,7 @@ public class JsonRpcTcpClient implements Closeable {
         pendingRequests.clear();
     }
 
+    @Override
     public void close() {
 
         if (!monitorSocket.get()) {
