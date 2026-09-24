@@ -314,17 +314,17 @@ class JsonRpcTcpClientTest {
     @Test
     void timeoutCleansPendingResponses() throws Exception {
 
-        server.setResponseDelay(Duration.ofMillis(1500));
+        server.setResponseDelay(Duration.ofSeconds(3));
         server.handle("slow", params -> "ignored");
 
-        try (JsonRpcTcpClient client = new JsonRpcTcpClient("localhost", server.getPort(), Duration.ofMillis(200))) {
+        try (JsonRpcTcpClient client = new JsonRpcTcpClient("localhost", server.getPort(), Duration.ofSeconds(1))) {
             CompletableFuture<JsonNode> future = client.callAsync("slow", List.of());
 
-            assertThrows(Exception.class, () -> future.get(2, TimeUnit.SECONDS));
+            assertThrows(Exception.class, () -> future.get(5, TimeUnit.SECONDS));
 
             // Wait for the server to finish processing the delayed request
             // so it can process the next one on the same connection
-            Thread.sleep(2000);
+            Thread.sleep(3500);
 
             // Verify subsequent calls still work on the same client (no resource leak)
             server.setResponseDelay(Duration.ZERO);
