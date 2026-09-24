@@ -27,6 +27,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,7 +53,7 @@ public class JsonRpcTcpClient implements Closeable {
 
     private final ObjectMapper objectMapper;
 
-    private volatile int totalConnectCount = 0;
+    private final AtomicInteger totalConnectCount = new AtomicInteger();
 
     private final AtomicLong idGenerator = new AtomicLong(0);
 
@@ -61,13 +63,13 @@ public class JsonRpcTcpClient implements Closeable {
 
     private Selector selector;
 
-    private volatile boolean monitorSocket = true;
+    private final AtomicBoolean monitorSocket = new AtomicBoolean(true);
 
-    private volatile boolean connected = false;
+    private final AtomicBoolean connected = new AtomicBoolean();
 
-    private volatile boolean everConnected = false;
+    private final AtomicBoolean everConnected = new AtomicBoolean();
 
-    private volatile boolean failed = false;
+    private final AtomicBoolean failed = new AtomicBoolean();
 
     private final Utf8LineDecoder lineDecoder = new Utf8LineDecoder();
 
@@ -98,13 +100,13 @@ public class JsonRpcTcpClient implements Closeable {
 
     private void processSelectorEvents() {
 
-        while (this.monitorSocket) {
+        while (monitorSocket.get()) {
             try {
-                if (!this.connected) {
-                    if (this.everConnected && this.monitorSocket && !this.failed) {
+                if (!connected.get()) {
+                    if (everConnected.get() && monitorSocket.get() && !failed.get()) {
                         handleConnectionLoss();
                     }
-                    if (!this.connected) {
+                    if (!connected.get()) {
                         Thread.sleep(100);
                     }
                     continue;
@@ -128,7 +130,7 @@ public class JsonRpcTcpClient implements Closeable {
                     try {
                         if (key.isReadable()) {
                             readData(key);
-                            if (!connected) {
+                            if (!connected.get()) {
                                 break;
                             }
                         }
@@ -137,7 +139,7 @@ public class JsonRpcTcpClient implements Closeable {
                         }
                     } catch (IOException e) {
                         log.error("I/O error in selector loop for {}:{}", host, port, e);
-                        connected = false;
+                        connected.set(false);
                         break;
                     } catch (Exception e) {
                         log.error("Unexpected error in selector loop for {}:{}", host, port, e);
@@ -148,7 +150,7 @@ public class JsonRpcTcpClient implements Closeable {
                 log.debug("Selector thread interrupted");
             } catch (Exception e) {
                 log.error("Critical error in selector loop for {}:{}", host, port, e);
-                connected = false;
+                connected.set(false);
             }
         }
         log.debug("Selector thread exiting for {}:{}", host, port);
@@ -169,10 +171,10 @@ public class JsonRpcTcpClient implements Closeable {
 
     public CompletableFuture<JsonNode> callAsync(String method, Object params) {
 
-        if (!monitorSocket) {
+        if (!monitorSocket.get()) {
             return CompletableFuture.failedFuture(new JsonRpcException("Client is closed"));
         }
-        if (failed) {
+        if (failed.get()) {
             return CompletableFuture.failedFuture(
                     new JsonRpcException("Client is disconnected from %s:%d".formatted(host, port)));
         }
@@ -267,7 +269,7 @@ public class JsonRpcTcpClient implements Closeable {
 
         if (bytesRead == -1) {
             log.warn("Connection closed by server {}:{}", host, port);
-            connected = false;
+            connected.set(false);
         }
     }
 
@@ -294,10 +296,10 @@ public class JsonRpcTcpClient implements Closeable {
 
     private boolean reconnectSocket() {
 
-        totalConnectCount++;
+        int connectAttempt = totalConnectCount.incrementAndGet();
 
         try {
-            log.debug("{} connection attempt to '{}:{}'", this.totalConnectCount, this.host, this.port);
+            log.debug("{} connection attempt to '{}:{}'", connectAttempt, this.host, this.port);
             this.socketChannel = SocketChannel.open(new InetSocketAddress(this.host, this.port));
 
             log.info("Connected to {}:{}", this.host, this.port);
@@ -309,8 +311,8 @@ public class JsonRpcTcpClient implements Closeable {
             this.selector = Selector.open();
             this.socketChannel.register(selector, SelectionKey.OP_READ | SelectionKey.OP_WRITE);
 
-            connected = true;
-            everConnected = true;
+            connected.set(true);
+            everConnected.set(true);
 
             return true;
         } catch (Exception e) {
@@ -327,7 +329,7 @@ public class JsonRpcTcpClient implements Closeable {
         closeQuietly(selector);
 
         for (int attempt = 1; attempt <= MAX_RECONNECT_ATTEMPTS; attempt++) {
-            if (!monitorSocket) {
+            if (!monitorSocket.get()) {
                 return;
             }
 
@@ -356,7 +358,7 @@ public class JsonRpcTcpClient implements Closeable {
         }
 
         log.error("Failed to reconnect to {}:{} after {} attempts", host, port, MAX_RECONNECT_ATTEMPTS);
-        failed = true;
+        failed.set(true);
         JsonRpcException cause =
                 new JsonRpcException("Connection lost to %s:%d and reconnection failed after %d attempts"
                         .formatted(host, port, MAX_RECONNECT_ATTEMPTS));
@@ -367,13 +369,13 @@ public class JsonRpcTcpClient implements Closeable {
 
     public void close() {
 
-        if (!monitorSocket) {
+        if (!monitorSocket.get()) {
             return;
         }
 
         log.info("Closing JSON-RPC client for {}:{}", host, port);
-        this.monitorSocket = false;
-        this.connected = false;
+        monitorSocket.set(false);
+        connected.set(false);
 
         if (selector != null && selector.isOpen()) {
             selector.wakeup();
