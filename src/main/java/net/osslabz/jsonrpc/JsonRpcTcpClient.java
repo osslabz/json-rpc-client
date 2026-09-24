@@ -60,6 +60,8 @@ public class JsonRpcTcpClient implements Closeable {
         this.connection = new TcpLineConnection(host, port, new ConnectionEvents());
     }
 
+    // Returning the whenComplete stage would change which future callers complete or cancel.
+    @SuppressWarnings("FutureReturnValueIgnored")
     public CompletableFuture<JsonNode> callAsync(String method, Object params) {
 
         if (connection.isClosed()) {

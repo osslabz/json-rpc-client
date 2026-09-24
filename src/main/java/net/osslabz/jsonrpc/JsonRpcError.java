@@ -11,6 +11,8 @@ public class JsonRpcError {
 
     private ObjectNode data;
 
+    // Public non-final class: instanceof would make a subclass instance equal to its parent's.
+    @SuppressWarnings("EqualsGetClass")
     @Override
     public boolean equals(Object o) {
 
