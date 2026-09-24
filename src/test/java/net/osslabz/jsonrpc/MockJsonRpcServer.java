@@ -50,7 +50,7 @@ public class MockJsonRpcServer implements Closeable {
     public MockJsonRpcServer() throws IOException {
 
         this.serverSocket = new ServerSocket(0);
-        executor.submit(this::acceptLoop);
+        executor.execute(this::acceptLoop);
     }
 
     public int getPort() {
@@ -89,7 +89,7 @@ public class MockJsonRpcServer implements Closeable {
             try {
                 Socket clientSocket = serverSocket.accept();
                 clientSockets.add(clientSocket);
-                executor.submit(() -> handleClient(clientSocket));
+                executor.execute(() -> handleClient(clientSocket));
             } catch (SocketException e) {
                 if (running) {
                     log.warn("SocketException in accept loop: {}", e.getMessage());
