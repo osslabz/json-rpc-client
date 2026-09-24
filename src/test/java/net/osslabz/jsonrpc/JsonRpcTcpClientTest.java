@@ -118,6 +118,30 @@ class JsonRpcTcpClientTest {
     }
 
     @Test
+    void responseWithoutResultOrErrorFails() {
+
+        server.sendRawResponse("{\"jsonrpc\":\"2.0\",\"id\":1}");
+
+        try (JsonRpcTcpClient client = new JsonRpcTcpClient("localhost", server.getPort())) {
+            JsonRpcException ex = assertThrows(JsonRpcException.class, () -> client.call("test", List.of()));
+
+            assertEquals("Received Invalid JSON-RPC Response (no result and no error)", ex.getMessage());
+        }
+    }
+
+    @Test
+    void ignoresMessageWithoutId() {
+
+        server.sendRawResponse("{\"jsonrpc\":\"2.0\",\"result\":\"orphan\"}");
+
+        try (JsonRpcTcpClient client = new JsonRpcTcpClient("localhost", server.getPort(), Duration.ofMillis(500))) {
+            JsonRpcException ex = assertThrows(JsonRpcException.class, () -> client.call("test", List.of()));
+
+            assertTrue(ex.getMessage().contains("timed out"), ex.getMessage());
+        }
+    }
+
+    @Test
     void callTimesOutWhenServerDoesNotRespond() {
 
         server.setResponseDelay(Duration.ofSeconds(10));
