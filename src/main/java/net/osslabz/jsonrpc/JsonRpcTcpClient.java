@@ -17,6 +17,7 @@ import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -68,7 +69,7 @@ public class JsonRpcTcpClient implements Closeable {
 
     private volatile boolean failed = false;
 
-    private final StringBuilder readBuffer = new StringBuilder();
+    private final Utf8LineDecoder lineDecoder = new Utf8LineDecoder();
 
     private Thread selectorThread;
 
@@ -249,10 +250,11 @@ public class JsonRpcTcpClient implements Closeable {
         SocketChannel channel = (SocketChannel) key.channel();
         ByteBuffer buffer = ByteBuffer.allocate(BUFFER_CAPACITY);
 
+        List<String> lines = new ArrayList<>();
         int bytesRead;
         while ((bytesRead = channel.read(buffer)) > 0) {
             buffer.flip();
-            readBuffer.append(StandardCharsets.UTF_8.decode(buffer));
+            lines.addAll(lineDecoder.decode(buffer));
             buffer.clear();
         }
 
@@ -262,16 +264,7 @@ public class JsonRpcTcpClient implements Closeable {
             return;
         }
 
-        String data = readBuffer.toString();
-        int lastNewline = data.lastIndexOf('\n');
-        if (lastNewline == -1) {
-            return;
-        }
-
-        String completeData = data.substring(0, lastNewline);
-        readBuffer.delete(0, lastNewline + 1);
-
-        for (String line : completeData.split("\n")) {
+        for (String line : lines) {
             String trimmed = line.trim();
             if (!trimmed.isEmpty()) {
                 processResponse(trimmed);
@@ -330,7 +323,7 @@ public class JsonRpcTcpClient implements Closeable {
 
     private void handleConnectionLoss() {
 
-        readBuffer.setLength(0);
+        lineDecoder.reset();
         closeQuietly(socketChannel);
         closeQuietly(selector);
 

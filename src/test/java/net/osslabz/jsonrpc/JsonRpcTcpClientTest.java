@@ -76,6 +76,18 @@ class JsonRpcTcpClientTest {
     }
 
     @Test
+    void decodesMultiByteCharactersSplitAcrossReads() throws Exception {
+
+        String largeValue = "€".repeat(8000);
+        server.handle("large", params -> largeValue);
+
+        try (JsonRpcTcpClient client = new JsonRpcTcpClient("localhost", server.getPort())) {
+            JsonNode result = client.call("large", List.of());
+            assertEquals(largeValue, result.asText());
+        }
+    }
+
+    @Test
     void serverErrorIncludesCodeAndMessage() {
 
         try (JsonRpcTcpClient client = new JsonRpcTcpClient("localhost", server.getPort())) {
