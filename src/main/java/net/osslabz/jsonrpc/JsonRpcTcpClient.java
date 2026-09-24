@@ -258,17 +258,16 @@ public class JsonRpcTcpClient implements Closeable {
             buffer.clear();
         }
 
-        if (bytesRead == -1) {
-            log.warn("Connection closed by server {}:{}", host, port);
-            connected = false;
-            return;
-        }
-
         for (String line : lines) {
             String trimmed = line.trim();
             if (!trimmed.isEmpty()) {
                 processResponse(trimmed);
             }
+        }
+
+        if (bytesRead == -1) {
+            log.warn("Connection closed by server {}:{}", host, port);
+            connected = false;
         }
     }
 

@@ -156,11 +156,15 @@ public class MockJsonRpcServer implements Closeable {
 
                 String responseJson = objectMapper.writeValueAsString(response);
                 log.debug("Sending response: {}", responseJson);
+                boolean lastResponse = disconnectAfterRequests >= 0 && requestCount >= disconnectAfterRequests;
+                if (lastResponse) {
+                    // Logged up front so the close follows the response as closely as a real server's would.
+                    log.debug("Disconnecting after {} requests", requestCount);
+                }
                 writer.println(responseJson);
                 writer.flush();
 
-                if (disconnectAfterRequests >= 0 && requestCount >= disconnectAfterRequests) {
-                    log.debug("Disconnecting after {} requests", requestCount);
+                if (lastResponse) {
                     break;
                 }
             }

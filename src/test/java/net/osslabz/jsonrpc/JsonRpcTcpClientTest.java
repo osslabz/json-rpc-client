@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -201,6 +202,26 @@ class JsonRpcTcpClientTest {
 
             JsonNode result2 = client.call("test", List.of());
             assertEquals("ok", result2.asText());
+        }
+    }
+
+    @Test
+    void keepsResponseThatArrivesWithConnectionClose() {
+
+        // Large enough that the client is still draining the socket when the server's close arrives.
+        String largeValue = "x".repeat(1_000_000);
+        AtomicInteger invocations = new AtomicInteger();
+        server.handle("test", params -> {
+            invocations.incrementAndGet();
+            return largeValue;
+        });
+        server.disconnectAfterRequests(1);
+
+        try (JsonRpcTcpClient client = new JsonRpcTcpClient("localhost", server.getPort(), Duration.ofSeconds(5))) {
+            JsonNode result = client.call("test", List.of());
+
+            assertEquals(largeValue, result.asText());
+            assertEquals(1, invocations.get(), "The request must not be sent again after its response arrived");
         }
     }
 
