@@ -87,13 +87,13 @@ public class JsonRpcTcpClient implements Closeable {
         objectMapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
         objectMapper.registerModule(new JavaTimeModule());
 
-        this.selectorThread = new Thread(this::processSelectorEvents);
-        this.selectorThread.setDaemon(true);
-        this.selectorThread.start();
-
         if (!this.reconnectSocket()) {
             throw new JsonRpcException("Initial connection to socket failed.");
         }
+
+        this.selectorThread = new Thread(this::processSelectorEvents, "json-rpc-selector-%s:%d".formatted(host, port));
+        this.selectorThread.setDaemon(true);
+        this.selectorThread.start();
     }
 
     private void processSelectorEvents() {

@@ -8,7 +8,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
@@ -290,6 +292,30 @@ class JsonRpcTcpClientTest {
     void throwsOnInitialConnectionFailure() {
 
         assertThrows(JsonRpcException.class, () -> new JsonRpcTcpClient("localhost", 1));
+    }
+
+    @Test
+    void leavesNoThreadBehindWhenInitialConnectionFails() {
+
+        Set<Thread> threadsBefore = Thread.getAllStackTraces().keySet();
+
+        assertThrows(JsonRpcException.class, () -> new JsonRpcTcpClient("localhost", 1));
+
+        List<Thread> leakedThreads = Thread.getAllStackTraces().keySet().stream()
+                .filter(thread -> !threadsBefore.contains(thread))
+                .filter(JsonRpcTcpClientTest::runsLibraryCode)
+                .toList();
+        assertEquals(List.of(), leakedThreads, "No client thread may outlive a failed construction");
+    }
+
+    // Filters out JDK pool threads that earlier tests' timeouts may start at any moment.
+    private static boolean runsLibraryCode(Thread thread) {
+
+        return Arrays.stream(thread.getStackTrace())
+                .map(StackTraceElement::getClassName)
+                .anyMatch(className -> className.startsWith("net.osslabz.jsonrpc.")
+                        && !className.startsWith(MockJsonRpcServer.class.getName())
+                        && !className.startsWith(JsonRpcTcpClientTest.class.getName()));
     }
 
     @Test
