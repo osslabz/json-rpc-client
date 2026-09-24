@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.OutputStream;
+import java.lang.management.ManagementFactory;
+import java.lang.management.ThreadMXBean;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
@@ -50,6 +52,32 @@ class TcpLineConnectionTest {
             connection.close();
 
             assertTrue(connection.isClosed());
+        }
+    }
+
+    @Test
+    void idleConnectionLeavesTheCpuAlone() throws Exception {
+
+        ThreadMXBean threads = ManagementFactory.getThreadMXBean();
+        try (ServerSocket serverSocket = new ServerSocket(0);
+                TcpLineConnection connection =
+                        new TcpLineConnection("localhost", serverSocket.getLocalPort(), listener)) {
+            String threadName = "json-rpc-selector-localhost:" + serverSocket.getLocalPort();
+            Thread selectorThread = Thread.getAllStackTraces().keySet().stream()
+                    .filter(thread -> thread.getName().equals(threadName))
+                    .findFirst()
+                    .orElseThrow();
+
+            long cpuBefore = threads.getThreadCpuTime(selectorThread.threadId());
+            long wallBefore = System.nanoTime();
+            Thread.sleep(1000);
+            long cpu = threads.getThreadCpuTime(selectorThread.threadId()) - cpuBefore;
+            long wall = System.nanoTime() - wallBefore;
+
+            // An idle loop blocks in select(); a spinning one burns hundreds of ms per second even on a loaded host.
+            assertTrue(
+                    cpu < wall * 0.05,
+                    "Idle selector thread used %d ms CPU in %d ms".formatted(cpu / 1_000_000, wall / 1_000_000));
         }
     }
 

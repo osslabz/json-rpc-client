@@ -11,10 +11,12 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Optional;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -50,7 +52,10 @@ final class TcpLineConnection implements Closeable {
 
     private SocketChannel socketChannel;
 
-    private Selector selector;
+    // Reassigned by reconnects on the selector thread, read by send() on callers' threads.
+    private final AtomicReference<Selector> selector = new AtomicReference<>();
+
+    private SelectionKey selectionKey;
 
     private final AtomicInteger totalConnectCount = new AtomicInteger();
 
@@ -87,6 +92,8 @@ final class TcpLineConnection implements Closeable {
     void send(String line) {
 
         outgoingLines.add(line);
+        // Makes a select in progress return, so the selector thread picks up write interest for the new line.
+        selector.get().wakeup();
     }
 
     boolean isClosed() {
@@ -132,12 +139,15 @@ final class TcpLineConnection implements Closeable {
 
     private void processReadyKeys() throws IOException {
 
-        int readyChannels = this.selector.select(100);
+        // A connected socket is always writable, so write interest only while lines are queued keeps select() blocking.
+        selectionKey.interestOps(
+                outgoingLines.isEmpty() ? SelectionKey.OP_READ : SelectionKey.OP_READ | SelectionKey.OP_WRITE);
+        int readyChannels = selector.get().select(100);
         if (readyChannels == 0) {
             return;
         }
 
-        Iterator<SelectionKey> keyIterator = this.selector.selectedKeys().iterator();
+        Iterator<SelectionKey> keyIterator = selector.get().selectedKeys().iterator();
         while (keyIterator.hasNext()) {
             SelectionKey key = keyIterator.next();
             keyIterator.remove();
@@ -222,8 +232,8 @@ final class TcpLineConnection implements Closeable {
                 log.trace("Socket channel is blocking, reconfiguring to unblocking...");
                 this.socketChannel.configureBlocking(false);
             }
-            this.selector = Selector.open();
-            this.socketChannel.register(selector, SelectionKey.OP_READ | SelectionKey.OP_WRITE);
+            this.selector.set(Selector.open());
+            this.selectionKey = this.socketChannel.register(selector.get(), SelectionKey.OP_READ);
 
             connected.set(true);
             everConnected.set(true);
@@ -240,7 +250,7 @@ final class TcpLineConnection implements Closeable {
 
         lineDecoder.reset();
         closeQuietly(socketChannel);
-        closeQuietly(selector);
+        closeQuietly(selector.get());
 
         for (int attempt = 1; attempt <= MAX_RECONNECT_ATTEMPTS; attempt++) {
             if (!monitorSocket.get()) {
@@ -291,9 +301,7 @@ final class TcpLineConnection implements Closeable {
         monitorSocket.set(false);
         connected.set(false);
 
-        if (selector != null && selector.isOpen()) {
-            selector.wakeup();
-        }
+        Optional.ofNullable(selector.get()).filter(Selector::isOpen).ifPresent(Selector::wakeup);
 
         try {
             selectorThread.join(2000);
@@ -308,7 +316,7 @@ final class TcpLineConnection implements Closeable {
         outgoingLines.clear();
 
         closeQuietly(socketChannel);
-        closeQuietly(selector);
+        closeQuietly(selector.get());
     }
 
     private void closeQuietly(Closeable resource) {
