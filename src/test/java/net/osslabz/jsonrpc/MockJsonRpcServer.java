@@ -23,7 +23,6 @@ import java.util.function.Function;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-
 public class MockJsonRpcServer implements Closeable {
 
     private static final Logger log = LoggerFactory.getLogger(MockJsonRpcServer.class);
@@ -48,49 +47,41 @@ public class MockJsonRpcServer implements Closeable {
 
     private volatile boolean disconnectBeforeFirstResponse = false;
 
-
     public MockJsonRpcServer() throws IOException {
 
         this.serverSocket = new ServerSocket(0);
         executor.submit(this::acceptLoop);
     }
 
-
     public int getPort() {
 
         return serverSocket.getLocalPort();
     }
-
 
     public void handle(String method, Function<JsonNode, Object> handler) {
 
         handlers.put(method, handler);
     }
 
-
     public void setResponseDelay(Duration delay) {
 
         this.responseDelay = delay;
     }
-
 
     public void disconnectAfterRequests(int n) {
 
         this.disconnectAfterRequests = n;
     }
 
-
     public void sendRawResponse(String raw) {
 
         this.rawResponse = raw;
     }
 
-
     public void disconnectBeforeFirstResponse() {
 
         this.disconnectBeforeFirstResponse = true;
     }
-
 
     private void acceptLoop() {
 
@@ -111,12 +102,12 @@ public class MockJsonRpcServer implements Closeable {
         }
     }
 
-
     private void handleClient(Socket clientSocket) {
 
         try (Socket socket = clientSocket;
-             BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
-             PrintWriter writer = new PrintWriter(socket.getOutputStream(), true, StandardCharsets.UTF_8)) {
+                BufferedReader reader =
+                        new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
+                PrintWriter writer = new PrintWriter(socket.getOutputStream(), true, StandardCharsets.UTF_8)) {
 
             int requestCount = 0;
             String line;
@@ -183,7 +174,6 @@ public class MockJsonRpcServer implements Closeable {
             clientSockets.remove(clientSocket);
         }
     }
-
 
     @Override
     public void close() throws IOException {

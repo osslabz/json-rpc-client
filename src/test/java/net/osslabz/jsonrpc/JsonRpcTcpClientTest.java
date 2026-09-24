@@ -15,18 +15,15 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-
 class JsonRpcTcpClientTest {
 
     private MockJsonRpcServer server;
-
 
     @BeforeEach
     void setUp() throws Exception {
 
         server = new MockJsonRpcServer();
     }
-
 
     @AfterEach
     void tearDown() throws Exception {
@@ -35,7 +32,6 @@ class JsonRpcTcpClientTest {
             server.close();
         }
     }
-
 
     @Test
     void callReturnsResult() throws Exception {
@@ -50,7 +46,6 @@ class JsonRpcTcpClientTest {
             assertEquals("hello", result.get(0).asText());
         }
     }
-
 
     @Test
     void handlesMultipleResponsesInSingleRead() throws Exception {
@@ -68,7 +63,6 @@ class JsonRpcTcpClientTest {
         }
     }
 
-
     @Test
     void handlesLargeResponse() throws Exception {
 
@@ -81,19 +75,16 @@ class JsonRpcTcpClientTest {
         }
     }
 
-
     @Test
     void serverErrorIncludesCodeAndMessage() {
 
         try (JsonRpcTcpClient client = new JsonRpcTcpClient("localhost", server.getPort())) {
-            JsonRpcException ex = assertThrows(JsonRpcException.class,
-                () -> client.call("nonexistent", List.of()));
+            JsonRpcException ex = assertThrows(JsonRpcException.class, () -> client.call("nonexistent", List.of()));
 
             assertTrue(ex.getMessage().contains("-32601"), "Should contain error code");
             assertTrue(ex.getMessage().contains("Method not found"), "Should contain error message");
         }
     }
-
 
     @Test
     void callTimesOutWhenServerDoesNotRespond() {
@@ -105,7 +96,6 @@ class JsonRpcTcpClientTest {
             assertThrows(JsonRpcException.class, () -> client.call("slow", List.of()));
         }
     }
-
 
     @Test
     void selectorThreadSurvivesMalformedResponse() throws Exception {
@@ -123,7 +113,6 @@ class JsonRpcTcpClientTest {
             assertEquals("survived", result.asText());
         }
     }
-
 
     @Test
     void closeCompletesAllPendingFutures() throws Exception {
@@ -146,7 +135,6 @@ class JsonRpcTcpClientTest {
         }
     }
 
-
     @Test
     void callAfterCloseFailsFast() throws Exception {
 
@@ -163,7 +151,6 @@ class JsonRpcTcpClientTest {
         long elapsed = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start);
         assertTrue(elapsed < 2000, "call after close should fail fast, took " + elapsed + "ms");
     }
-
 
     @Test
     void handlesBurstOfRequests() throws Exception {
@@ -185,7 +172,6 @@ class JsonRpcTcpClientTest {
         }
     }
 
-
     @Test
     void reconnectsAfterServerDropsConnection() throws Exception {
 
@@ -204,7 +190,6 @@ class JsonRpcTcpClientTest {
         }
     }
 
-
     @Test
     void failsFuturesAfterMaxReconnectAttempts() throws Exception {
 
@@ -219,11 +204,12 @@ class JsonRpcTcpClientTest {
             Thread.sleep(500);
 
             JsonRpcException ex = assertThrows(JsonRpcException.class, () -> client.call("test", List.of()));
-            assertTrue(ex.getMessage().contains("reconnection failed") || ex.getMessage().contains("disconnected"),
-                "Should indicate reconnection failure: " + ex.getMessage());
+            assertTrue(
+                    ex.getMessage().contains("reconnection failed")
+                            || ex.getMessage().contains("disconnected"),
+                    "Should indicate reconnection failure: " + ex.getMessage());
         }
     }
-
 
     @Test
     void failsFastAfterReconnectionFailure() throws Exception {
@@ -250,7 +236,6 @@ class JsonRpcTcpClientTest {
         }
     }
 
-
     @Test
     void timeoutCleansPendingResponses() throws Exception {
 
@@ -274,7 +259,6 @@ class JsonRpcTcpClientTest {
         }
     }
 
-
     @Test
     void retriesPendingRequestAfterReconnect() throws Exception {
 
@@ -290,14 +274,11 @@ class JsonRpcTcpClientTest {
         }
     }
 
-
     @Test
     void throwsOnInitialConnectionFailure() {
 
-        assertThrows(JsonRpcException.class,
-            () -> new JsonRpcTcpClient("localhost", 1));
+        assertThrows(JsonRpcException.class, () -> new JsonRpcTcpClient("localhost", 1));
     }
-
 
     @Test
     void callAndMapListReturnsTypedList() throws Exception {
@@ -313,7 +294,6 @@ class JsonRpcTcpClientTest {
         }
     }
 
-
     @Test
     void timeoutExceptionMessageIncludesDetails() {
 
@@ -321,13 +301,10 @@ class JsonRpcTcpClientTest {
         server.handle("myMethod", params -> "ok");
 
         try (JsonRpcTcpClient client = new JsonRpcTcpClient("localhost", server.getPort(), Duration.ofMillis(200))) {
-            JsonRpcException ex = assertThrows(JsonRpcException.class,
-                () -> client.call("myMethod", List.of()));
+            JsonRpcException ex = assertThrows(JsonRpcException.class, () -> client.call("myMethod", List.of()));
 
-            assertTrue(ex.getMessage().contains("myMethod"),
-                "Should contain method name: " + ex.getMessage());
-            assertTrue(ex.getMessage().contains("timed out"),
-                "Should mention timeout: " + ex.getMessage());
+            assertTrue(ex.getMessage().contains("myMethod"), "Should contain method name: " + ex.getMessage());
+            assertTrue(ex.getMessage().contains("timed out"), "Should mention timeout: " + ex.getMessage());
         }
     }
 }

@@ -5,15 +5,12 @@ public class JsonRpcException extends RuntimeException {
     public JsonRpcException(String message) {
 
         super(message);
-
     }
-
 
     public JsonRpcException(Throwable e) {
 
         super(e);
     }
-
 
     public JsonRpcException(JsonRpcError errorResponse) {
 
