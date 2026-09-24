@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
@@ -58,7 +59,7 @@ public class JsonRpcTcpClient implements Closeable {
 
     private final AtomicLong idGenerator = new AtomicLong(0);
 
-    private final ConcurrentLinkedQueue<String> pendingRequests = new ConcurrentLinkedQueue<>();
+    private final Queue<String> pendingRequests = new ConcurrentLinkedQueue<>();
 
     private final Map<Long, PendingCall> pendingResponses = new ConcurrentHashMap<>();
 
