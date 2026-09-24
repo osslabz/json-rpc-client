@@ -4,8 +4,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 public class JsonRpcRequest {
 
-    @JsonProperty("jsonrpc")
-    private final String version = "2.0";
+    private static final String VERSION = "2.0";
 
     private final Long id;
 
@@ -35,8 +34,9 @@ public class JsonRpcRequest {
         return id;
     }
 
+    @JsonProperty("jsonrpc")
     public String getVersion() {
 
-        return version;
+        return VERSION;
     }
 }
