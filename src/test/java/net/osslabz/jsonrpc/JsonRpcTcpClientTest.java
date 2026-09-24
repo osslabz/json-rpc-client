@@ -117,7 +117,7 @@ class JsonRpcTcpClientTest {
 
         server.sendRawResponse("this is not valid json\n");
 
-        try (JsonRpcTcpClient client = new JsonRpcTcpClient("localhost", server.getPort(), Duration.ofMillis(2000))) {
+        try (JsonRpcTcpClient client = new JsonRpcTcpClient("localhost", server.getPort(), Duration.ofSeconds(2))) {
             // First call gets the raw malformed response - should timeout or fail gracefully,
             // but NOT kill the selector thread
             assertThrows(JsonRpcException.class, () -> client.call("test1", List.of()));
