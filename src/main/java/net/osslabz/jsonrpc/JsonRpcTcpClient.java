@@ -131,13 +131,13 @@ public class JsonRpcTcpClient implements Closeable {
 
                     try {
                         if (key.isReadable()) {
-                            readData(key);
+                            readData((SocketChannel) key.channel());
                             if (!connected.get()) {
                                 break;
                             }
                         }
                         if (key.isWritable() && !pendingRequests.isEmpty()) {
-                            writeData(key);
+                            writeData((SocketChannel) key.channel());
                         }
                     } catch (IOException e) {
                         log.error("I/O error in selector loop for {}:{}", host, port, e);
@@ -158,9 +158,8 @@ public class JsonRpcTcpClient implements Closeable {
         log.debug("Selector thread exiting for {}:{}", host, port);
     }
 
-    private void writeData(SelectionKey key) throws IOException {
+    private void writeData(SocketChannel channel) throws IOException {
 
-        SocketChannel channel = (SocketChannel) key.channel();
         String request;
         while ((request = pendingRequests.poll()) != null) {
             log.debug("Sending request: {}", request);
@@ -262,9 +261,8 @@ public class JsonRpcTcpClient implements Closeable {
         }
     }
 
-    private void readData(SelectionKey key) throws IOException {
+    private void readData(SocketChannel channel) throws IOException {
 
-        SocketChannel channel = (SocketChannel) key.channel();
         ByteBuffer buffer = ByteBuffer.allocate(BUFFER_CAPACITY);
 
         List<String> lines = new ArrayList<>();
