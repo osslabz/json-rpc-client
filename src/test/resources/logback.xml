@@ -4,7 +4,8 @@
         <!-- encoders are assigned the type
              ch.qos.logback.classic.encoder.PatternLayoutEncoder by default -->
         <encoder>
-            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+            <!-- Capped at 1000 chars: GitHub's runner stalls on long output lines (actions/runner#1031). -->
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %.-1000msg%n</pattern>
         </encoder>
     </appender>
 
