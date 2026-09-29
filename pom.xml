@@ -21,7 +21,7 @@
 
         <maven.compiler.release>${osslabz.java.version}</maven.compiler.release>
 
-        <jackson.version>2.22.2</jackson.version>
+        <jackson.version>2.22.3</jackson.version>
 
         <!-- Floors, not targets: measured coverage minus five points, capped at 0.90 line and
              0.75 branch, so noise doesn't trip the gate but a real regression does. -->
